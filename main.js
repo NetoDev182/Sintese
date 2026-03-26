@@ -1,90 +1,119 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
 // ==========================================
-// 1. CONFIGURAÇÃO DA CENA (O Palco)
+// 1. CONFIGURAÇÃO DA CENA E BRILHO (AURA)
 // ==========================================
 const container = document.getElementById('canvas-container');
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x050505, 0.0015); // Neblina para profundidade
+scene.fog = new THREE.FogExp2(0x020202, 0.002);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
-camera.position.set(0, 150, 400);
+camera.position.set(0, 0, 500);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 container.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.autoRotate = true; // Gira a câmera lentamente sozinha
-controls.autoRotateSpeed = 1.0;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.5; // Rotação mais lenta e contemplativa
+
+// Adicionando o "Bloom" (Brilho Neon)
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.8, 0.5, 0.1);
+composer.addPass(bloomPass);
 
 // ==========================================
-// 2. CRIAÇÃO DAS PARTÍCULAS (A Entidade)
+// 2. A GEOMETRIA DA ENTIDADE
 // ==========================================
-const PARTICLE_COUNT = 50000; // Reduzido para garantir 60fps em qualquer celular
+const PARTICLE_COUNT = 60000; 
 const geometry = new THREE.BufferGeometry();
 const positions = new Float32Array(PARTICLE_COUNT * 3);
+const randomOffsets = new Float32Array(PARTICLE_COUNT); // Para individualidade de cada partícula
 
-// Cria uma esfera inicial de partículas
 for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const r = 150 * Math.cbrt(Math.random()); // Distribuição dentro da esfera
+    const r = 180 * Math.cbrt(Math.random()); 
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos((Math.random() * 2) - 1);
     
     positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
     positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
     positions[i * 3 + 2] = r * Math.cos(phi);
+    
+    randomOffsets[i] = Math.random() * Math.PI * 2; // Deslocamento aleatório
 }
 
 geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geometry.setAttribute('aRandom', new THREE.BufferAttribute(randomOffsets, 1));
 
-// Variáveis que enviamos para a Placa de Vídeo (GPU)
 const uniforms = {
     uTime: { value: 0 },
-    uAudio: { value: 0 }
+    uBass: { value: 0 },   // Graves
+    uTreble: { value: 0 }  // Agudos
 };
 
-// Shader Ultra-Seguro (Sem funções complexas que quebram em mobile)
+// ==========================================
+// 3. O CÉREBRO DA ENTIDADE (SHADERS)
+// ==========================================
 const vertexShader = `
     uniform float uTime;
-    uniform float uAudio;
+    uniform float uBass;
+    uniform float uTreble;
+    attribute float aRandom;
     varying vec3 vColor;
 
     void main() {
         vec3 pos = position;
-        
-        // Distância do centro
         float dist = length(pos);
         
-        // Efeito Torção (Twist): Gira mais forte nas bordas
-        float angle = uTime * 0.5 + dist * 0.02;
-        float s = sin(angle);
-        float c = cos(angle);
-        
-        // Aplica a rotação no eixo Y
-        vec3 twistedPos = vec3(
-            pos.x * c - pos.z * s,
-            pos.y,
-            pos.x * s + pos.z * c
+        // 1. RESPIRAÇÃO (Breathing) - Movimento constante mesmo sem som
+        float breath = sin(uTime * 1.5 + dist * 0.01) * 0.05 + 0.95;
+        pos *= breath;
+
+        // 2. ANATOMIA FLUIDA (Pseudo-Noise Seguro)
+        // Cruzamos ondas trigonométricas para criar deformações de "ameba"
+        float speed = uTime * 0.5;
+        vec3 organicFlow = vec3(
+            sin(pos.y * 0.015 + speed) * cos(pos.z * 0.015 + speed),
+            cos(pos.x * 0.015 + speed) * sin(pos.z * 0.015 + speed),
+            sin(pos.x * 0.015 + speed) * cos(pos.y * 0.015 + speed)
         );
         
-        // Microfone: Expande a entidade de dentro pra fora
-        twistedPos += normalize(twistedPos) * (uAudio * 150.0);
-        
-        // Cores baseadas na altura (Y) e no som
-        float heightPercent = (twistedPos.y + 150.0) / 300.0;
-        vec3 colorBottom = vec3(0.0, 0.5, 1.0); // Azul
-        vec3 colorTop = vec3(1.0, 0.0, 0.5);    // Rosa
-        vColor = mix(colorBottom, colorTop, heightPercent);
-        vColor += vec3(uAudio * 0.5); // Fica branco/brilhante quando o som bate forte
+        // A deformação aumenta com a distância do centro (tentáculos)
+        pos += organicFlow * (30.0 + uBass * 100.0);
 
-        vec4 mvPosition = modelViewMatrix * vec4(twistedPos, 1.0);
+        // 3. REAÇÃO AO ÁUDIO
+        // Graves (Bass) expandem o núcleo
+        pos += normalize(pos) * (uBass * 120.0);
         
-        // Tamanho da partícula diminui com a distância
-        gl_PointSize = (2.0 + uAudio * 6.0) * (300.0 / -mvPosition.z);
+        // Agudos (Treble) causam espasmos nas bordas
+        pos.y += sin(uTime * 10.0 + aRandom) * uTreble * 40.0;
+
+        // 4. COLORIZAÇÃO DINÂMICA
+        // Núcleo mais escuro/azulado, bordas mais ciano/magenta dependendo do fluxo
+        float flowIntensity = length(organicFlow);
+        vec3 colorCore = vec3(0.0, 0.2, 0.8);
+        vec3 colorEdge = vec3(0.0, 1.0, 0.8); // Ciano
+        vec3 colorAgitated = vec3(1.0, 0.0, 0.6); // Magenta quando há som agudo
+        
+        float mixFactor = smoothstep(0.0, 200.0, dist);
+        vColor = mix(colorCore, colorEdge, mixFactor);
+        
+        // Fica magenta/rosa com os agudos (nervosismo)
+        vColor = mix(vColor, colorAgitated, uTreble);
+        
+        // Aumenta o brilho total com os graves
+        vColor += vec3(uBass * 0.4);
+
+        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+        gl_PointSize = (2.0 + uBass * 5.0 + uTreble * 3.0) * (400.0 / -mvPosition.z);
         gl_Position = projectionMatrix * mvPosition;
     }
 `;
@@ -92,11 +121,12 @@ const vertexShader = `
 const fragmentShader = `
     varying vec3 vColor;
     void main() {
-        // Recorta o quadrado para virar uma bolinha perfeita
         float distToCenter = length(gl_PointCoord - vec2(0.5));
         if(distToCenter > 0.5) discard;
         
-        gl_FragColor = vec4(vColor, 0.9);
+        // Borda suave (Soft particle) em vez de dura
+        float alpha = smoothstep(0.5, 0.1, distToCenter);
+        gl_FragColor = vec4(vColor, alpha * 0.9);
     }
 `;
 
@@ -105,7 +135,7 @@ const material = new THREE.ShaderMaterial({
     vertexShader: vertexShader,
     fragmentShader: fragmentShader,
     transparent: true,
-    blending: THREE.AdditiveBlending, // Faz as cores se somarem (efeito neon)
+    blending: THREE.AdditiveBlending,
     depthWrite: false
 });
 
@@ -113,50 +143,40 @@ const points = new THREE.Points(geometry, material);
 scene.add(points);
 
 // ==========================================
-// 3. CAPTURA DE ÁUDIO (Com Feedback de Erro)
+// 4. CAPTURA DE ÁUDIO SEPARADO (Graves e Agudos)
 // ==========================================
 let audioContext, analyser, dataArray;
 let isListening = false;
-let currentAudioLevel = 0;
+let currentBass = 0;
+let currentTreble = 0;
 
 const btn = document.getElementById('btn-iniciar');
 const statusDisplay = document.getElementById('status');
 
 btn.addEventListener('click', async () => {
-    statusDisplay.innerText = "Pedindo permissão...";
-    statusDisplay.style.color = "#ffdd00";
-
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
+        analyser.fftSize = 512; // Maior resolução para separar melhor graves e agudos
         
         const source = audioContext.createMediaStreamSource(stream);
         source.connect(analyser);
         dataArray = new Uint8Array(analyser.frequencyBinCount);
         
         isListening = true;
-        btn.style.display = 'none'; // Some com o botão
-        statusDisplay.innerText = "🔊 Ouvindo perfeitamente!";
+        btn.style.display = 'none';
+        statusDisplay.innerText = "Entidade viva e conectada.";
         statusDisplay.style.color = "#00ffcc";
 
     } catch (err) {
-        console.error("Erro no áudio:", err);
-        if (err.name === 'NotAllowedError') {
-            statusDisplay.innerText = "❌ Permissão negada! Libere o microfone no navegador.";
-        } else if (err.name === 'NotFoundError') {
-            statusDisplay.innerText = "❌ Nenhum microfone encontrado neste aparelho.";
-        } else {
-            statusDisplay.innerText = "❌ Erro ao acessar microfone: " + err.message;
-        }
+        statusDisplay.innerText = "Erro no microfone. Verifique as permissões.";
         statusDisplay.style.color = "#ff3333";
     }
 });
 
 // ==========================================
-// 4. MOTOR DE ANIMAÇÃO (O Loop)
+// 5. MOTOR DE ANIMAÇÃO
 // ==========================================
 const clock = new THREE.Clock();
 
@@ -164,34 +184,44 @@ function animate() {
     requestAnimationFrame(animate);
     
     const time = clock.getElapsedTime();
-    uniforms.uTime.value = time; // Atualiza o tempo na GPU
+    uniforms.uTime.value = time;
 
-    // Processa o som se estiver ouvindo
     if (isListening) {
         analyser.getByteFrequencyData(dataArray);
         
-        // Tira a média do volume
-        let sum = 0;
-        for(let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i];
-        }
-        let targetLevel = (sum / dataArray.length) / 255.0; // Valor entre 0 e 1
+        // Pegando os Graves (Bass) - Posições 0 a 10 no array
+        let bassSum = 0;
+        for(let i = 0; i < 10; i++) bassSum += dataArray[i];
+        let targetBass = (bassSum / 10) / 255.0;
         
-        // Suavização (Lerp) para não piscar violentamente
-        currentAudioLevel += (targetLevel - currentAudioLevel) * 0.15;
-        uniforms.uAudio.value = currentAudioLevel;
+        // Pegando os Agudos (Treble) - Posições 150 a 200 no array
+        let trebleSum = 0;
+        let countTreble = 0;
+        for(let i = 150; i < 200; i++) {
+            trebleSum += dataArray[i];
+            countTreble++;
+        }
+        let targetTreble = (trebleSum / countTreble) / 255.0;
+        
+        // Suavização (Lerp) independente
+        currentBass += (targetBass - currentBass) * 0.2;
+        currentTreble += (targetTreble - currentTreble) * 0.15;
+        
+        uniforms.uBass.value = currentBass;
+        uniforms.uTreble.value = currentTreble;
     }
 
-    controls.update(); // Necessário para o autoRotate funcionar
-    renderer.render(scene, camera);
+    controls.update();
+    
+    // ATENÇÃO: Mudamos de renderer.render para composer.render para ativar o Brilho!
+    composer.render();
 }
 
-// Adapta a tela se o celular for virado de lado
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Inicia o motor!
 animate();
