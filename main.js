@@ -1,57 +1,59 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import { OrbitControls } from 'https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+import { EffectComposer } from 'https://esm.sh/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'https://esm.sh/three@0.160.0/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'https://esm.sh/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
 
-const container = document.getElementById('canvas-container');
+// --- SETUP ---
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 3000);
-camera.position.set(0, 0, 500);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+camera.position.z = 500;
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-container.appendChild(renderer.domElement);
+renderer.setPixelRatio(window.devicePixelRatio);
+document.getElementById('canvas-container').appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
+// --- POST PROCESSING (O Brilho) ---
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.8, 0.4, 0.1));
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.1);
+composer.addPass(bloom);
 
-const PARTICLE_COUNT = 120000; 
+// --- PARTÍCULAS ---
+const count = 120000;
 const geometry = new THREE.BufferGeometry();
-const positions = new Float32Array(PARTICLE_COUNT * 3);
-const randoms = new Float32Array(PARTICLE_COUNT);
+const pos = new Float32Array(count * 3);
+const rand = new Float32Array(count);
 
-for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const r = Math.random() * 200;
+for(let i=0; i<count; i++) {
+    const r = Math.random() * 250;
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos((Math.random() * 2) - 1);
-    positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-    positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-    positions[i * 3 + 2] = r * Math.cos(phi);
-    randoms[i] = Math.random();
+    pos[i*3] = r * Math.sin(phi) * Math.cos(theta);
+    pos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+    pos[i*3+2] = r * Math.cos(phi);
+    rand[i] = Math.random();
 }
 
-geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 1));
+geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+geometry.setAttribute('aRandom', new THREE.BufferAttribute(rand, 1));
 
 const uniforms = {
     uTime: { value: 0 },
-    uAudioEnergy: { value: 0 },
-    uColorRange: { value: 0 }
+    uAudio: { value: 0 }
 };
 
 const vertexShader = `
     uniform float uTime;
-    uniform float uAudioEnergy;
-    varying vec3 vColor;
+    uniform float uAudio;
     attribute float aRandom;
+    varying vec3 vColor;
 
-    // Simplex Noise 3D para movimento orgânico
+    // Simplex Noise para movimento fluido
     vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
     vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
     vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
@@ -77,73 +79,76 @@ const vertexShader = `
     }
 
     void main() {
-        vec3 pos = position;
+        vec3 p = position;
+        float noise = snoise(p * 0.005 + uTime * 0.2);
         
-        // Movimento de "Ser Vivo": Deslocamento via ruído
-        float noiseScale = 0.004;
-        float speed = uTime * 0.3;
-        float n = snoise(pos * noiseScale + speed + aRandom);
+        // Deslocamento orgânico (LaTeX: P_{final} = P_{initial} + \vec{n} \cdot A)
+        p += normalize(p) * noise * (50.0 + uAudio * 200.0);
         
-        // A nuvem se expande e contrai organicamente
-        pos += normalize(pos) * n * (40.0 + uAudioEnergy * 150.0);
-        
-        // Cores baseadas na posição e som
-        vColor = mix(vec3(0.1, 0.8, 1.0), vec3(1.0, 0.1, 0.5), n * 0.5 + 0.5 + uAudioEnergy);
+        // Agitação local
+        p.y += sin(uTime * 2.0 + aRandom * 10.0) * (10.0 + uAudio * 50.0);
 
-        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-        gl_PointSize = (2.0 + uAudioEnergy * 5.0) * (400.0 / -mvPosition.z);
-        gl_Position = projectionMatrix * mvPosition;
+        vColor = mix(vec3(0.0, 1.0, 0.8), vec3(0.6, 0.0, 1.0), noise * 0.5 + 0.5);
+        vColor += uAudio * 0.5;
+
+        vec4 mvp = modelViewMatrix * vec4(p, 1.0);
+        gl_PointSize = (2.0 + uAudio * 4.0) * (350.0 / -mvp.z);
+        gl_Position = projectionMatrix * mvp;
     }
 `;
 
 const fragmentShader = `
     varying vec3 vColor;
     void main() {
-        if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;
+        if(length(gl_PointCoord - 0.5) > 0.5) discard;
         gl_FragColor = vec4(vColor, 0.8);
     }
 `;
 
 const material = new THREE.ShaderMaterial({
-    uniforms: uniforms,
-    vertexShader: vertexShader,
-    fragmentShader: fragmentShader,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
+    uniforms, vertexShader, fragmentShader,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
 });
 
 const cloud = new THREE.Points(geometry, material);
 scene.add(cloud);
 
-let analyser, dataArray;
-document.getElementById('start-audio-btn').addEventListener('click', async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const audioCtx = new AudioContext();
-    const source = audioCtx.createMediaStreamSource(stream);
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    source.connect(analyser);
-    dataArray = new Uint8Array(analyser.frequencyBinCount);
-    document.querySelector('.ui-panel').style.opacity = '0.2';
+// --- AUDIO ---
+let analyser, data;
+document.getElementById('start-btn').addEventListener('click', async () => {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const ctx = new AudioContext();
+        const src = ctx.createMediaStreamSource(stream);
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        src.connect(analyser);
+        data = new Uint8Array(analyser.frequencyBinCount);
+        document.getElementById('status').innerText = "Ouvindo...";
+        document.getElementById('start-btn').style.opacity = "0.5";
+    } catch(e) {
+        alert("Erro no microfone!");
+    }
 });
 
+// --- LOOP ---
 function animate() {
     requestAnimationFrame(animate);
-    const time = performance.now() * 0.001;
-    uniforms.uTime.value = time;
+    const t = performance.now() * 0.001;
+    uniforms.uTime.value = t;
 
-    if (analyser) {
-        analyser.getByteFrequencyData(dataArray);
+    if(analyser) {
+        analyser.getByteFrequencyData(data);
         let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-        uniforms.uAudioEnergy.value = sum / dataArray.length / 255;
+        for(let i=0; i<data.length; i++) sum += data[i];
+        uniforms.uAudio.value = (sum / data.length) / 255;
     }
 
-    cloud.rotation.y += 0.002;
+    cloud.rotation.y += 0.001;
     controls.update();
     composer.render();
 }
+
 animate();
 
 window.addEventListener('resize', () => {
