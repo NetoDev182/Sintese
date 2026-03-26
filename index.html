@@ -2,33 +2,22 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Motor de Sinestesia: Vida Orgânica</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entidade de Energia 3D</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="canvas-container"></div>
     
     <div class="ui-panel">
-        <h1>Entidade<br><span>De Energia</span></h1>
-        <p>Um fluxo de 100 mil partículas de energia pura que vive e muta com o seu microfone.</p>
+        <h1>Entidade <span>Orgânica</span></h1>
+        <p>120.000 partículas governadas por ruído matemático e pela sua voz.</p>
         
-        <button id="start-audio-btn">
-            🎤 Habilitar Microfone
-        </button>
-        
-        <div id="status-text">Aguardando áudio...</div>
+        <button id="start-btn">🎤 Ativar Microfone</button>
+        <div id="status">Status: Pronto para iniciar</div>
     </div>
 
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-        }
-      }
-    </script>
     <script type="module" src="main.js"></script>
 </body>
 </html>
