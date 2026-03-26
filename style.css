@@ -1,10 +1,10 @@
 :root {
-    --bg-color: #000001;
-    --panel-bg: rgba(5, 5, 8, 0.85);
-    --text-primary: #f0f0f5;
-    --text-secondary: #707085;
-    --accent: #ff0055; /* Rosa Neon */
-    --accent-glow: rgba(255, 0, 85, 0.5);
+    --bg-color: #010101;
+    --panel-bg: rgba(5, 5, 5, 0.7);
+    --text-primary: #ffffff;
+    --text-secondary: #9090a0;
+    --accent: #00ffcc; /* Ciano Neon */
+    --accent-glow: rgba(0, 255, 204, 0.4);
 }
 
 body, html {
@@ -30,88 +30,81 @@ body, html {
 
 .ui-panel {
     position: absolute;
-    bottom: 2rem;
+    top: 2rem;
     left: 2rem;
-    width: 280px;
+    width: 300px;
     background: var(--panel-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 24px;
+    border-radius: 20px;
     padding: 2rem;
     z-index: 10;
-    box-shadow: 0 15px 50px rgba(0,0,0,0.8);
-    animation: panelSlide 1s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+    animation: panelIn 1s ease-out;
 }
 
-@keyframes panelSlide {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+@keyframes panelIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
 }
 
 h1 {
-    font-size: 1.6rem;
+    font-size: 1.8rem;
     margin: 0 0 0.8rem 0;
     font-weight: 700;
     line-height: 1.1;
-    letter-spacing: -0.03em;
 }
 
 h1 span {
-    background: linear-gradient(135deg, #ff0055, #ffdd00);
+    background: linear-gradient(90deg, #00ffcc, #ff00ff);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
 p {
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     color: var(--text-secondary);
-    margin-bottom: 1.8rem;
+    margin-bottom: 2rem;
     line-height: 1.6;
-    font-weight: 300;
 }
 
 button {
     width: 100%;
-    padding: 1.1rem;
-    background: var(--accent);
-    border: none;
-    color: white;
+    padding: 1rem;
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
     font-family: inherit;
     font-weight: 700;
-    font-size: 0.95rem;
-    border-radius: 12px;
+    font-size: 1rem;
+    border-radius: 10px;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 0 15px var(--accent-glow);
 }
 
 button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 25px var(--accent-glow);
+    background: var(--accent);
+    color: #000;
+    box-shadow: 0 0 20px var(--accent-glow);
 }
 
 #status-text {
-    margin-top: 1.2rem;
-    font-size: 0.75rem;
+    margin-top: 1rem;
+    font-size: 0.8rem;
     color: var(--text-secondary);
     text-align: center;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
 }
 
-/* Responsividade Mobile */
+/* Responsividade Mobile Inferior */
 @media (max-width: 768px) {
     .ui-panel {
         top: auto;
         bottom: 0;
         left: 0;
         width: 100%;
-        border-radius: 24px 24px 0 0;
+        border-radius: 20px 20px 0 0;
         padding: 1.5rem;
-        border-bottom: none;
     }
 }
-
-
